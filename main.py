@@ -147,7 +147,7 @@ def translate_batch(texts, from_language, to_language, delay):
             print(f"Translating batch of {len(texts)} items in parallel")
         
         # Translate in parallel using ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(texts)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(texts), 10)) as executor:
             translations = list(executor.map(
                 lambda t: translate_single(t, from_language, to_language), 
                 texts

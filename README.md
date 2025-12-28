@@ -42,7 +42,7 @@ This project is actively maintained but may have edge cases. If you encounter a 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/crusader-kings-3-auto-translator.git
+   git clone https://github.com/imamfahrudin/crusader-kings-3-auto-translator.git
    cd crusader-kings-3-auto-translator
    ```
 
@@ -77,7 +77,7 @@ The service will process zip files placed in the `input/` folder and output tran
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/crusader-kings-3-auto-translator.git
+   git clone https://github.com/imamfahrudin/crusader-kings-3-auto-translator.git
    cd crusader-kings-3-auto-translator
    ```
 
@@ -445,7 +445,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Support
 
-**Issues**: [Report bugs or request features](https://github.com/yourusername/crusader-kings-3-auto-translator/issues)
+**Issues**: [Report bugs or request features](https://github.com/imamfahrudin/crusader-kings-3-auto-translator/issues)
 
 **Discussions**: Share your translations and get help from the community
 

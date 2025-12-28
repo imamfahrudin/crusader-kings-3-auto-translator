@@ -76,8 +76,11 @@ python main.py -trans 0 D:\the\path\to\english\loc\folder
 
 #### Why is this taking so long? 
 
-A 2 second timeout was implemented after each translation cycle.
-This had to be done because the current API does not currently accept a mass request and, in extreme cases, completely blocks further requests.
+The translator now uses **batch processing** with **adaptive rate limiting** for optimal speed:
+- Translates 10 lines at once instead of one-by-one
+- Starts with minimal delay (0.1s) and only increases if the API blocks requests
+- Automatically reduces delay when translations succeed
+- **Up to 20x faster** than the old line-by-line approach while still avoiding API blocks
 
 #### Why are some lines not translated at all? 
 

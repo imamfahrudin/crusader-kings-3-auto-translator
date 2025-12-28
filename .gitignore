@@ -1,2 +1,28 @@
-/.idea
-/_pycache
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Project specific
+error_log.txt
+
+# OS
+.DS_Store
+Thumbs.db

@@ -212,7 +212,7 @@ def process_zip_file(zip_file, config):
         output_zip_name = zip_file.replace('.zip', f'_{to_language}.zip')
         output_zip_path = output_dir / output_zip_name
 
-        if create_zip(str(target_dir), str(output_zip_path), to_language):
+        if create_zip(str(target_dir), str(output_zip_path), to_naming):
             # Move processed zip to processed folder or remove it
             processed_dir = Path(config['input_dir']) / "processed"
             processed_dir.mkdir(exist_ok=True)

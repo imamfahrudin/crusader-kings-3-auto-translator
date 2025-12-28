@@ -15,6 +15,7 @@ This project is actively maintained but may have edge cases. If you encounter a 
 
 - [@CyberNord](https://github.com/CyberNord) - Main developer
 - [@Martin220799](https://github.com/Martin220799) - PowerShell controls
+- [@imamfahrudin](https://github.com/imamfahrudin) - Docker implementation, validation system, and enhanced logging
 
 ## 🌟 Features
 

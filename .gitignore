@@ -24,7 +24,8 @@ dist/
 error_log.txt
 
 # Processing folders
-input/
+input/*
+!input/README.txt
 temp/
 output/
 

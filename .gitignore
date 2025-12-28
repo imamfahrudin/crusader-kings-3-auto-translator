@@ -23,6 +23,11 @@ dist/
 # Project specific
 error_log.txt
 
+# Processing folders
+input/
+temp/
+output/
+
 # OS
 .DS_Store
 Thumbs.db

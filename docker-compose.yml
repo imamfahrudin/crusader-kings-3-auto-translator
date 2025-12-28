@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  translator:
+    build: .
+    container_name: ck3-translator
+    volumes:
+      - ./input:/app/input
+      - ./temp:/app/temp
+      - ./output:/app/output
+      - ./config.json:/app/config.json
+    environment:
+      - TEMP_DIR=/app/temp

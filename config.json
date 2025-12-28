@@ -1,0 +1,9 @@
+{
+  "from_language": "en",
+  "to_language": "de",
+  "do_translation": true,
+  "input_dir": "/app/input",
+  "temp_dir": "/app/temp",
+  "output_dir": "/app/output",
+  "check_interval": 30
+}

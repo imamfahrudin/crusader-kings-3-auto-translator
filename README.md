@@ -10,29 +10,61 @@ This Project allows the user to automatically translate ck3 (Crusader Kings 3) l
 ## Authors
 
 - [@CyberNord](https://github.com/CyberNord)
-- [@Martin220799](https://github.com/Martin220799)    (Powershell Controls) 
-
+- [@Martin220799](https://github.com/Martin220799)    (Powershell Controls)
 
 ## Installation
 
+### Docker Setup (Recommended)
+
+1. **Clone or download** the project
+2. **Navigate** to the project directory
+3. **Configure** the target language in `config.json`:
+   ```json
+   {
+     "from_language": "en",
+     "to_language": "de",
+     "do_translation": true,
+     "input_dir": "/app/input",
+     "temp_dir": "/app/temp",
+     "output_dir": "/app/output",
+     "check_interval": 30
+   }
+   ```
+4. **Build and run** with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+The service will automatically watch the `input/` folder for zip files containing 'english' folders and process them.
+
+### Manual Setup
+
 #### Requirements
-Before Starting make sure the following libraries are installed. 
+Before Starting make sure the following libraries are installed.
 
 - [Python 3.10](https://www.python.org/downloads/) (or higher)
-- [googletrans 4.0.0rc1](https://libraries.io/pypi/googletrans)
-
-It is important to use the googletrans version 4.0.0rc1 (or higher) older versions will cause the the Program to throw an error.
+- [deep-translator](https://libraries.io/pypi/deep-translator)
 
 #### First Steps
-Download the project folder from github and unpack it in a Location of your desire. Start a command prompt (e.g. PowerShell) in the path where the main.py is located. 
-The default setting is translating from english to german and it will look like that. 
+Download the project folder from github and unpack it in a Location of your desire. Start a command prompt (e.g. PowerShell) in the path where the main.py is located.
+The default setting is translating from english to german and it will look like that.
 
 ```bash
   python main.py D:\the\path\to\english\loc\folder
 ```
 
-### Usage
-Below you can see the general Syntax 
+## Usage
+
+### Docker Usage
+
+1. **Place zip files** containing 'english' folders in the `input/` directory
+2. **Wait** for automatic processing (check interval defined in config.json)
+3. **Find translated zip files** in the `output/` directory with `_{language}.zip` suffix
+4. **Processed zip files** are moved to `input/processed/`
+
+### Manual Usage
+
+Below you can see the general Syntax
 
 ```bash
 python main.py [-h] [-l1 L1] [-l2 L2] [-trans TRANS] path
@@ -56,8 +88,42 @@ The list is limited by the possible localisations supported in CK3.
 - 'ru' russian
 - 'zh-cn' simplified chinese
 - 'ko' korean
+- 'id' indonesian
 
-#### More examples
+### Docker Commands
+
+```bash
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+
+# Rebuild after code changes
+docker-compose up -d --build
+```
+
+### Configuration
+
+Edit `config.json` to change settings:
+
+- `from_language`: Source language code (default: "en")
+- `to_language`: Target language code (default: "de") 
+- `do_translation`: Enable/disable translation (default: true)
+- `check_interval`: Seconds between checking for new files (default: 30)
+
+## Examples
+
+### Docker Examples
+
+1. **Basic usage**: Place a zip file containing an 'english' folder in `input/`
+2. **Multiple languages**: Change `to_language` in config.json and restart
+3. **No translation**: Set `do_translation: false` for file conversion only
+
+### Manual Examples
 
 this will translate from english (default) to french
 ```bash

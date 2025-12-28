@@ -4,12 +4,12 @@ import argparse
 from pathlib import Path
 import os
 import re
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 # ---------------------------------------------------
 DEBUG = False
 INFO = False
-translator = Translator()
+translator = None
 RE_PATTERN = re.compile(r'\[[^"\]]*]|\$[^$]+\$|#[^$]+#|\\n|@[^!]+!')
 REPLACER = '{@}'
 LINE_STR = '-----------------------------------------'
@@ -26,7 +26,8 @@ def get_loc_code(from_l: bool, pars_arg: str):
         'es': 'spanish',
         'ru': 'russian',
         'zh-cn': 'simp_chinese',
-        'ko': 'korean'
+        'ko': 'korean',
+        'id': 'indonesian'
     }
     locale = locale_codes.get(pars_arg)
     if not locale:
@@ -136,19 +137,22 @@ def translate_batch(texts, from_language, to_language, delay):
         if DEBUG:
             print(f"Translating batch of {len(texts)} items with delay {delay}s")
         
-        time.sleep(delay)
-        
-        # Translate all texts in one API call
-        translations = translator.translate(texts, dest=to_language, src=from_language)
+        translations = []
+        for text in texts:
+            time.sleep(delay)
+            try:
+                trans = GoogleTranslator(source=from_language, target=to_language).translate(text)
+                if trans is None:
+                    trans = text  # Keep original if translation fails
+                translations.append(trans)
+            except Exception as e:
+                print(f"Translation failed for '{text}': {e}")
+                translations.append(text)  # Keep original
         
         # Successful translation - reduce delay
         new_delay = max(INITIAL_DELAY, delay * 0.8)
         
-        # Handle single vs multiple translations
-        if not isinstance(translations, list):
-            translations = [translations]
-        
-        return [t.text for t in translations], new_delay, True
+        return translations, new_delay, True
         
     except Exception as e:
         # On error, increase delay exponentially

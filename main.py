@@ -103,10 +103,25 @@ def extract_zip(zip_path, extract_to):
         return False
 
 
-def create_zip(source_dir, zip_path):
-    """Create zip file from directory"""
+def create_zip(source_dir, zip_path, target_language):
+    """Create zip file from directory with target language folder structure"""
     try:
-        shutil.make_archive(zip_path.replace('.zip', ''), 'zip', source_dir)
+        # Create a temporary directory to build the proper structure
+        temp_zip_dir = Path(source_dir).parent / "zip_temp"
+        temp_zip_dir.mkdir(exist_ok=True)
+        
+        # Create target language folder inside temp directory
+        target_folder = temp_zip_dir / target_language
+        if target_folder.exists():
+            shutil.rmtree(target_folder)
+        shutil.copytree(source_dir, target_folder)
+        
+        # Create zip with the folder structure
+        shutil.make_archive(zip_path.replace('.zip', ''), 'zip', temp_zip_dir)
+        
+        # Clean up temp directory
+        shutil.rmtree(temp_zip_dir)
+        
         print(f"Created zip file: {zip_path}")
         return True
     except Exception as e:
@@ -197,7 +212,7 @@ def process_zip_file(zip_file, config):
         output_zip_name = zip_file.replace('.zip', f'_{to_language}.zip')
         output_zip_path = output_dir / output_zip_name
 
-        if create_zip(str(target_dir), str(output_zip_path)):
+        if create_zip(str(target_dir), str(output_zip_path), to_language):
             # Move processed zip to processed folder or remove it
             processed_dir = Path(config['input_dir']) / "processed"
             processed_dir.mkdir(exist_ok=True)

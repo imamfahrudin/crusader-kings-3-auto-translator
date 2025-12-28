@@ -1,24 +1,53 @@
 
-# ck3-Translator
+# Crusader Kings 3 Auto Translator 🌍🔄
 
-This Project allows the user to automatically translate ck3 (Crusader Kings 3) localisation files to other languages supported by the game and the translator API.
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**ATTENTION!**
-**This project is pretty new and there might be some cornercases I haven't adressed yet**
-**If you find a Bug please let me know and provide the files to reproduce the Error**
+Automatically translate Crusader Kings 3 localization files to multiple languages using Google Translate API. Features Docker support, automatic validation, batch processing, and intelligent cleanup for seamless mod translation workflows.
 
-## Authors
+## ⚠️ Notice
 
-- [@CyberNord](https://github.com/CyberNord)
-- [@Martin220799](https://github.com/Martin220799)    (Powershell Controls)
+This project is actively maintained but may have edge cases. If you encounter a bug, please open an issue with the files needed to reproduce the error.
 
-## Installation
+## 👥 Authors
 
-### Docker Setup (Recommended)
+- [@CyberNord](https://github.com/CyberNord) - Main developer
+- [@Martin220799](https://github.com/Martin220799) - PowerShell controls
 
-1. **Clone or download** the project
-2. **Navigate** to the project directory
-3. **Configure** the target language in `config.json`:
+## 🌟 Features
+
+- **Docker Support**: Ready-to-deploy containerized application with Docker Compose
+- **Automatic Processing**: Watches input folder for zip files and processes automatically
+- **Validation System**: Ensures all files are translated correctly before creating output
+- **Smart Cleanup**: Automatic temporary file cleanup after successful processing
+- **Batch Translation**: Processes multiple lines at once for 20x faster translation
+- **Progress Tracking**: Real-time progress indicators with file-by-file tracking
+- **Multi-Language**: Support for 8 languages (English, German, French, Spanish, Russian, Chinese, Korean, Indonesian)
+- **Intelligent Extraction**: Handles zip files with proper path normalization
+- **Error Handling**: Robust error handling with comprehensive logging
+- **Compatible**: Works with other Paradox titles (Stellaris, EU4, etc.)
+
+## 📋 Prerequisites
+
+- Python 3.10 or higher
+- Docker and Docker Compose (optional, for containerized deployment)
+- Internet connection for Google Translate API access
+
+## 🚀 Quick Start
+
+### Option 1: Docker Deployment (Recommended)
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/crusader-kings-3-auto-translator.git
+   cd crusader-kings-3-auto-translator
+   ```
+
+2. **Configure the target language**
+   
+   Edit `config.json` with your desired settings:
    ```json
    {
      "from_language": "en",
@@ -30,65 +59,138 @@ This Project allows the user to automatically translate ck3 (Crusader Kings 3) l
      "check_interval": 30
    }
    ```
-4. **Build and run** with Docker Compose:
+
+3. **Build and run with Docker Compose**
    ```bash
    docker-compose up -d
    ```
 
-The service will automatically watch the `input/` folder for zip files containing 'english' folders and process them.
+4. **View logs**
+   ```bash
+   docker-compose logs -f
+   ```
 
-### Manual Setup
+The service will process zip files placed in the `input/` folder and output translated files to `output/`.
 
-#### Requirements
-Before Starting make sure the following libraries are installed.
+### Option 2: Local Python Deployment
 
-- [Python 3.10](https://www.python.org/downloads/) (or higher)
-- [deep-translator](https://libraries.io/pypi/deep-translator)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/crusader-kings-3-auto-translator.git
+   cd crusader-kings-3-auto-translator
+   ```
 
-#### First Steps
-Download the project folder from github and unpack it in a Location of your desire. Start a command prompt (e.g. PowerShell) in the path where the main.py is located.
-The default setting is translating from english to german and it will look like that.
+2. **Create a virtual environment** (recommended)
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
 
-```bash
-  python main.py D:\the\path\to\english\loc\folder
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure settings**
+   
+   Edit `config.json` with your target language preferences
+
+5. **Run the application**
+   ```bash
+   python main.py
+   ```
+
+## ⚙️ Configuration
+
+### Configuration File
+
+Edit `config.json` to customize translation settings:
+
+```json
+{
+  "from_language": "en",        // Source language code
+  "to_language": "de",          // Target language code
+  "do_translation": true,       // Enable/disable translation
+  "input_dir": "/app/input",    // Input directory path
+  "temp_dir": "/app/temp",      // Temporary files directory
+  "output_dir": "/app/output",  // Output directory path
+  "check_interval": 30          // Seconds between checks (Docker mode)
+}
 ```
 
-## Usage
+**Configuration Options:**
+- **from_language**: Source language code (default: "en")
+- **to_language**: Target language code (default: "de")
+- **do_translation**: Enable/disable translation (default: true)
+- **input_dir**: Input directory path (default: "/app/input")
+- **temp_dir**: Temporary files directory (default: "/app/temp")
+- **output_dir**: Output directory path (default: "/app/output")
+- **check_interval**: Seconds between input folder checks in Docker mode (default: 30)
 
-### Docker Usage
+### Supported Languages
 
-1. **Place zip files** containing 'english' folders in the `input/` directory
-2. **Wait** for automatic processing (check interval defined in config.json)
-3. **Find translated zip files** in the `output/` directory with `_{language}.zip` suffix
-4. **Processed zip files** are moved to `input/processed/`
+The translator supports all languages available in Crusader Kings 3:
 
-### Manual Usage
+| Code | Language |
+|------|----------|
+| `en` | English |
+| `de` | German |
+| `fr` | French |
+| `es` | Spanish |
+| `ru` | Russian |
+| `zh-cn` | Simplified Chinese |
+| `ko` | Korean |
+| `id` | Indonesian |
 
-Below you can see the general Syntax
+## 🔧 How It Works
+
+1. **Input Detection**: Application monitors `input/` folder for zip files
+2. **Extraction**: Extracts zip contents with path normalization
+3. **Validation**: Checks for required `english/` folder structure
+4. **Translation**: Processes all `.yml` files using batch translation
+5. **Validation**: Verifies all source files have corresponding translated files
+6. **Output**: Creates translated zip file in `output/` folder
+7. **Cleanup**: Moves original zip to `processed/` and clears temporary files
+
+## 📊 Usage
+
+### Docker Mode
+
+1. **Place zip files** in the `input/` directory
+2. **Monitor progress** via Docker logs:
+   ```bash
+   docker-compose logs -f
+   ```
+3. **Retrieve translated files** from the `output/` directory
+4. **Original files** are moved to `input/processed/`
+
+### Zip File Requirements
+
+Your zip file must follow this structure:
+
+```
+your_mod.zip
+└── english/
+    ├── file1_english.yml
+    ├── file2_english.yml
+    └── subfolder/
+        └── file3_english.yml
+```
+
+✅ **Correct**: Contains `english/` folder at root
+❌ **Incorrect**: Files directly at root without `english/` folder
+
+See `input/README.txt` for detailed requirements.
+
+### Manual Mode (Legacy)
+
+For command-line usage without Docker:
 
 ```bash
-python main.py [-h] [-l1 L1] [-l2 L2] [-trans TRANS] path
+python main.py
 ```
-The following parts are mandatory
- - **python main.py**&nbsp;&nbsp;&nbsp;&nbsp;call of the programm
- - **path**&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;path to the folder to be translated
 
-Optional information
-- **[-h]**&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; no function for now
-- **[-l1 L1]**&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;given input language (default = en)
-- **[-l2 L2]**&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;desired output language (default = de)
-- **[-trans TRANS]**&nbsp;&nbsp;(default = 1) If this value is set to 0 there will be no translation. The Programm wil only convert the files to the disired output language so that it is supported by the game (e.g. results in english text in german localisation)
-
-#### Supported languages 
-The list is limited by the possible localisations supported in CK3.
-- 'en' english
-- 'de' german
-- 'fr' french
-- 'es' spanish
-- 'ru' russian
-- 'zh-cn' simplified chinese
-- 'ko' korean
-- 'id' indonesian
+The application will process zip files once and exit.
 
 ### Docker Commands
 
@@ -96,7 +198,7 @@ The list is limited by the possible localisations supported in CK3.
 # Start the service
 docker-compose up -d
 
-# View logs
+# View real-time logs
 docker-compose logs -f
 
 # Stop the service
@@ -104,66 +206,248 @@ docker-compose down
 
 # Rebuild after code changes
 docker-compose up -d --build
+
+# Restart the service
+docker-compose restart
 ```
 
-### Configuration
+## 📈 Translation Performance
 
-Edit `config.json` to change settings:
+The translator uses **batch processing** for optimal speed:
 
-- `from_language`: Source language code (default: "en")
-- `to_language`: Target language code (default: "de") 
-- `do_translation`: Enable/disable translation (default: true)
-- `check_interval`: Seconds between checking for new files (default: 30)
+- **Batch Size**: 20 lines per batch
+- **Parallel Processing**: Translates multiple lines simultaneously
+- **Speed**: Up to 20x faster than line-by-line translation
+- **Reliability**: Automatic retry on API failures
+- **Validation**: Ensures translation quality before output
 
-## Examples
+### Progress Tracking
 
-### Docker Examples
+Real-time progress indicators show:
+- File processing status (`[1/5] Processing: file.yml`)
+- Translation progress (`Progress: 15/15 lines (100%)`)
+- Validation results (✓ All files translated successfully)
+- Cleanup status (✓ Temp directory cleared)
 
-1. **Basic usage**: Place a zip file containing an 'english' folder in `input/`
-2. **Multiple languages**: Change `to_language` in config.json and restart
-3. **No translation**: Set `do_translation: false` for file conversion only
+## 💡 Examples
 
-### Manual Examples
+### Docker Deployment Example
+**Scenario**: Translate a mod from English to German
 
-this will translate from english (default) to french
+1. Place `my_mod.zip` in `input/` folder
+2. Set `"to_language": "de"` in `config.json`
+3. Run `docker-compose up -d`
+4. Check logs: `docker-compose logs -f`
+5. Find `my_mod_de.zip` in `output/` folder
+6. Original moved to `input/processed/my_mod.zip`
+
+### Multiple Language Translation
+
+**Scenario**: Translate the same mod to French and Spanish
+
+1. Process with German (as above)
+2. Stop service: `docker-compose down`
+3. Change config: `"to_language": "fr"`
+4. Restore zip: Copy from `input/processed/` back to `input/`
+5. Restart: `docker-compose up -d`
+6. Repeat for Spanish with `"to_language": "es"`
+
+### File Conversion Only
+
+**Scenario**: Create localization structure without translation
+
+1. Set `"do_translation": false` in `config.json`
+2. Place zip in `input/` folder
+3. Output will have proper structure with English text
+
+## 📝 Logging
+
+The application provides detailed console logging for monitoring:
+
+**Log Levels:**
+- **INFO**: General status and progress updates
+- **ERROR**: Critical errors requiring attention
+- **File Progress**: Per-file processing status
+- **Translation Progress**: Line-by-line translation completion
+
+**View Logs:**
 ```bash
-python main.py -l2 fr D:\the\path\to\english\loc\folder
+# Docker deployment
+docker-compose logs -f
+
+# Local Python
+# Logs appear in console where you ran python main.py
 ```
-this will translate from french to german (default)
-```bash
-python main.py -l1 fr D:\the\path\to\english\loc\folder
+
+**Example Log Output:**
+```
+Starting Crusader Kings 3 Auto Translator
+Processing zip files from /app/input
+Found zip file: my_mod.zip
+
+Processing: my_mod.zip
+Translation: en → de
+
+Found 3 localization file(s) to process
+
+[1/3] Processing: events_english.yml
+  Translating 45 line(s)...
+  Progress: 45/45 lines (100%)
+  ✓ Completed: events_english.yml
+
+[2/3] Processing: decisions_english.yml
+  Translating 32 line(s)...
+  Progress: 32/32 lines (100%)
+  ✓ Completed: decisions_english.yml
+
+[3/3] Processing: triggers_english.yml
+  Translating 18 line(s)...
+  Progress: 18/18 lines (100%)
+  ✓ Completed: triggers_english.yml
+
+Validation:
+  Source files: 3
+  Target files: 3
+  ✓ All files translated successfully
+
+✓ Successfully processed my_mod.zip
+✓ Temp directory cleared
+
+Processing complete! Processed 1 file(s)
 ```
 
-this will just alter the first line and filename so that the localisation is detected by the game
-```bash
-python main.py -trans 0 D:\the\path\to\english\loc\folder
-```
-## FAQ
+## 🐛 Troubleshooting
 
-#### Why is this taking so long? 
+### Issue: Application doesn't start
 
-The translator now uses **batch processing** with **adaptive rate limiting** for optimal speed:
-- Translates 10 lines at once instead of one-by-one
-- Starts with minimal delay (0.1s) and only increases if the API blocks requests
-- Automatically reduces delay when translations succeed
-- **Up to 20x faster** than the old line-by-line approach while still avoiding API blocks
+**Symptoms**: Container fails to start or exits immediately
 
-#### Why are some lines not translated at all? 
+**Solutions:**
+- Check Docker installation: `docker --version`
+- Verify config.json syntax (valid JSON format)
+- Check file permissions on input/temp/output folders
+- View error logs: `docker-compose logs`
 
-The API has problems translating certain sentences or very long strings correctly.
-In order to avoid complete crap, the default language is retained in such cases.
-Especially translations from English into Spanish are very prone to this.
+### Issue: No 'english' folder found
 
+**Symptoms**: Error message "No 'english' folder found in {file}.zip"
 
-#### Will this translator work for other iterations of the pdx genere? 
+**Solutions:**
+- Verify zip structure contains `english/` folder at root level
+- Extract and inspect zip contents manually
+- Ensure folder name is exactly "english" (lowercase)
+- See `input/README.txt` for correct structure
 
-Some tests were made with the "Stellaris" localization files, which turned out to be satisfactory on the whole.
-I strongly assume that most of the titles are compatible since the syntax is similar or even identical.
-So yes, you can probably use this translator for "Stellaris" or other titles from the developer Paradox.
+### Issue: Translation fails midway
 
-#### What kind of Syntax is currently supported in the translation files?
- - Square Bracket Content: Text enclosed in square brackets, including the brackets themselves. For example, `[example]` would be filtered.
- - Dollar Sign Enclosed Text: Text enclosed between dollar signs ($), including the dollar signs themselves. For example, `$example$` would be filtered. 
- - Hashtag Enclosed Text: Text enclosed between hashtags (#), including the hashtags themselves. For example, `#example#` would be filtered. 
- - Newline Sequence: The newline character `\n`, which represents a line break in a text. 
- - @-Prefixed Text: Text that starts with @ and ends with an exclamation mark (!). For example, `@example!` would be filtered.
+**Symptoms**: Process stops during translation, incomplete output
+
+**Solutions:**
+- Check internet connection (required for Google Translate API)
+- Verify no rate limiting from Google Translate
+- Check Docker logs for specific error messages
+- Try reducing batch size in code if needed
+
+### Issue: File count mismatch
+
+**Symptoms**: "File count mismatch!" during validation
+
+**Solutions:**
+- Check for empty .yml files (skipped during translation)
+- Ensure all source files have valid YAML syntax
+- Verify no hidden files or system files in source zip
+- Check logs for specific files that failed
+
+### Issue: Output zip not created
+
+**Symptoms**: No file appears in `output/` folder
+
+**Solutions:**
+- Check validation passed (logs show ✓ All files translated successfully)
+- Verify write permissions on `output/` folder
+- Check available disk space
+- Review Docker logs for zip creation errors
+
+## 📊 Supported Syntax
+
+The translator preserves special CK3 localization syntax:
+
+| Syntax Type | Example | Description |
+|-------------|---------|-------------|
+| **Square Brackets** | `[example]` | Variable references |
+| **Dollar Signs** | `$example$` | Scope references |
+| **Hashtags** | `#example#` | Color/formatting codes |
+| **Newlines** | `\n` | Line break sequences |
+| **@-Prefixes** | `@example!` | Icon references |
+
+These elements are **preserved** during translation and **not translated**.
+
+## 🔬 Technical Details
+
+### Translation Engine
+
+- **API**: Google Translate (via deep-translator library)
+- **Method**: Batch processing with parallel execution
+- **Batch Size**: 20 lines per batch
+- **Concurrency**: Up to 10 parallel translation workers
+- **Error Handling**: Automatic retry with original text fallback
+
+### File Processing
+
+- **Supported Formats**: `.yml`, `.yaml`
+- **Encoding**: UTF-8
+- **Path Handling**: Cross-platform compatible (Windows/Linux)
+- **Normalization**: Automatic path separator conversion
+
+### Validation System
+
+- **File Count**: Source and target must match
+- **Folder Structure**: Directory hierarchy must be identical
+- **Empty Files**: Skipped with warning message
+
+## 🤝 Contributing
+
+Contributions are welcome! To contribute:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'feat: add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. **Open** a Pull Request
+
+Please ensure:
+- Code follows existing style conventions
+- Changes are tested with Docker deployment
+- Commit messages follow conventional commit format
+- Documentation is updated for new features
+
+## 🧪 Testing
+
+Test the application with various scenarios:
+
+1. **Single file translation**: Simple mod with one localization file
+2. **Multi-file translation**: Complex mod with subfolder structure
+3. **Large files**: Files with 100+ translatable lines
+4. **Special characters**: Test syntax preservation
+5. **Error cases**: Invalid zip structure, missing folders
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [deep-translator](https://libraries.io/pypi/deep-translator) - Google Translate API wrapper
+- [Docker](https://www.docker.com/) - Containerization platform
+- Paradox Development Studio - Crusader Kings 3 game engine
+- Community contributors and testers
+
+## 💬 Support
+
+**Issues**: [Report bugs or request features](https://github.com/yourusername/crusader-kings-3-auto-translator/issues)
+
+**Discussions**: Share your translations and get help from the community
+
+---
+
+Made with ❤️ for the Crusader Kings 3 modding community

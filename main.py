@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import os
 import re
+import concurrent.futures
 from deep_translator import GoogleTranslator
 
 # ---------------------------------------------------
@@ -13,9 +14,7 @@ translator = None
 RE_PATTERN = re.compile(r'\[[^"\]]*]|\$[^$]+\$|#[^$]+#|\\n|@[^!]+!')
 REPLACER = '{@}'
 LINE_STR = '-----------------------------------------'
-BATCH_SIZE = 10  # Translate 10 lines at once
-INITIAL_DELAY = 0.1  # Start with minimal delay
-MAX_DELAY = 5.0  # Max delay on rate limit errors
+BATCH_SIZE = 20  # Translate 20 lines at once
 # ---------------------------------------------------
 
 def get_loc_code(from_l: bool, pars_arg: str):
@@ -128,40 +127,40 @@ def tofile(filepath, filename, file_data, from_naming, to_naming):
         raise
 
 
+def translate_single(text, from_language, to_language):
+    """Translate a single text, returning original on failure"""
+    try:
+        trans = GoogleTranslator(source=from_language, target=to_language).translate(text)
+        return trans if trans else text
+    except Exception as e:
+        print(f"Translation failed for '{text}': {e}")
+        return text
+
+
 def translate_batch(texts, from_language, to_language, delay):
     """
-    Translate a batch of texts with exponential backoff on errors.
+    Translate a batch of texts in parallel.
     Returns tuple of (translations_list, new_delay, success_flag)
     """
     try:
         if DEBUG:
-            print(f"Translating batch of {len(texts)} items with delay {delay}s")
+            print(f"Translating batch of {len(texts)} items in parallel")
         
-        translations = []
-        for text in texts:
-            time.sleep(delay)
-            try:
-                trans = GoogleTranslator(source=from_language, target=to_language).translate(text)
-                if trans is None:
-                    trans = text  # Keep original if translation fails
-                translations.append(trans)
-            except Exception as e:
-                print(f"Translation failed for '{text}': {e}")
-                translations.append(text)  # Keep original
+        # Translate in parallel using ThreadPoolExecutor
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(texts)) as executor:
+            translations = list(executor.map(
+                lambda t: translate_single(t, from_language, to_language), 
+                texts
+            ))
         
-        # Successful translation - reduce delay
-        new_delay = max(INITIAL_DELAY, delay * 0.8)
-        
-        return translations, new_delay, True
+        return translations, 0, True
         
     except Exception as e:
-        # On error, increase delay exponentially
-        new_delay = min(MAX_DELAY, delay * 2)
-        print(f'Error during batch translation: {str(e)}, increasing delay to {new_delay}s')
-        log_message(f"Batch translation error: {str(e)}, new delay: {new_delay}s")
+        print(f'Error during batch translation: {str(e)}')
+        log_message(f"Batch translation error: {str(e)}")
         
         # Return original texts with failure flag
-        return texts, new_delay, False
+        return texts, 0, False
 
 
 def translate(file_data, from_language, to_language):
@@ -191,8 +190,7 @@ def translate(file_data, from_language, to_language):
     
     print(f"Found {len(translation_queue)} lines to translate")
     
-    # Process in batches with adaptive delay
-    current_delay = INITIAL_DELAY
+    # Process in batches
     total_lines = len(translation_queue)
     
     for batch_start in range(0, total_lines, BATCH_SIZE):
@@ -203,11 +201,11 @@ def translate(file_data, from_language, to_language):
         texts_to_translate = [item['filtered'] for item in batch]
         
         # Translate batch
-        translations, current_delay, success = translate_batch(
+        translations, _, success = translate_batch(
             texts_to_translate, 
             from_language, 
             to_language, 
-            current_delay
+            0  # No delay
         )
         
         # Apply translations back to file_data
@@ -238,7 +236,7 @@ def translate(file_data, from_language, to_language):
                     print(f"Skipped line #{item['line_num']}: {item['original']} (translation failed)")
                 log_message(f"Skipped translation for: {item['original']}")
         
-        print(f"Completed lines {batch_start + 1}-{batch_end} of {total_lines} (delay: {current_delay:.2f}s)")
+        print(f"Completed lines {batch_start + 1}-{batch_end} of {total_lines}")
     
     print(f"Translation complete! Total lines processed: {total_lines}")
 

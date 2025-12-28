@@ -130,6 +130,29 @@ def create_zip(source_dir, zip_path, target_language):
         return False
 
 
+def get_already_translated_files(source_dir, target_dir, from_naming, to_naming):
+    """Get set of files that have already been translated"""
+    if not target_dir.exists():
+        return set()
+    
+    translated_files = set()
+    target_files = list(target_dir.rglob("*.yml*"))
+    
+    for target_file in target_files:
+        # Get relative path from target directory
+        rel_path = target_file.relative_to(target_dir)
+        
+        # Convert target filename back to source filename
+        source_filename = str(rel_path).replace(to_naming, from_naming, 1)
+        source_file_path = source_dir / source_filename
+        
+        # Add to set if source file exists (valid translation)
+        if source_file_path.exists():
+            translated_files.add(source_file_path)
+    
+    return translated_files
+
+
 def validate_translation(source_dir, target_dir):
     """Validate that all files were translated correctly"""
     source_files = list(source_dir.rglob("*.yml*"))
@@ -171,21 +194,31 @@ def process_zip_file(zip_file, config):
 
     # Create temp subdirectories
     target_dir = temp_dir / get_loc_code(False, config['to_language'])
-
-    # Clean temp directories
     english_subdir = temp_dir / "english"
-    if english_subdir.exists():
-        shutil.rmtree(english_subdir)
-    if target_dir.exists():
-        shutil.rmtree(target_dir)
 
-    target_dir.mkdir(parents=True, exist_ok=True)
+    # Check if we're resuming from previous run
+    is_resuming = english_subdir.exists() and target_dir.exists()
+    
+    if is_resuming:
+        print(f"\n🔄 Detected existing translation in progress!")
+        print(f"   Source folder: {english_subdir}")
+        print(f"   Target folder: {target_dir}")
+        print(f"   Will resume from where it left off...\n")
+    else:
+        # Clean temp directories for fresh start
+        if english_subdir.exists():
+            shutil.rmtree(english_subdir)
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
 
-    # Extract zip
-    if not extract_zip(zip_path, temp_dir):
-        return False
+        target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check if english folder exists
+        # Extract zip
+        print(f"📦 Extracting {zip_file}...")
+        if not extract_zip(zip_path, temp_dir):
+            return False
+
+    # Check if english folder exists (should exist from extraction or previous run)
     if not english_subdir.exists():
         print(f"No 'english' folder found in {zip_file}")
         log_message(f"No 'english' folder in {zip_file}")
@@ -197,11 +230,12 @@ def process_zip_file(zip_file, config):
     from_naming = get_loc_code(True, from_language)
     to_naming = get_loc_code(False, to_language)
 
-    print(f"\nProcessing: {zip_file}")
-    print(f"Translation: {from_language} → {to_language}\n")
+    if not is_resuming:
+        print(f"\nProcessing: {zip_file}")
+        print(f"Translation: {from_language} → {to_language}\n")
 
     try:
-        init(english_subdir, config['do_translation'], from_language, to_language, from_naming, to_naming)
+        init(english_subdir, target_dir, config['do_translation'], from_language, to_language, from_naming, to_naming, is_resuming)
 
         # Validate translation before zipping
         if not validate_translation(english_subdir, target_dir):
@@ -267,21 +301,44 @@ def watch_and_process(config):
     print("Application finished")
 
 
-def init(target_dir, do_translation, from_language, to_language, from_naming, to_naming):
+def init(source_dir, target_dir, do_translation, from_language, to_language, from_naming, to_naming, is_resuming=False):
     # Set temp directory environment variable for tofile function
     temp_dir = os.environ.get('TEMP_DIR', '/app/temp')
     os.environ['TEMP_DIR'] = temp_dir
 
-    INPUT_DIR = target_dir
+    INPUT_DIR = source_dir
     
     # Get all yml files
     all_files = list(INPUT_DIR.rglob("*.yml*"))
-    total_files = len(all_files)
     
-    print(f"\nFound {total_files} localization file(s) to process\n")
+    # Get already translated files if resuming
+    already_translated = set()
+    if is_resuming:
+        already_translated = get_already_translated_files(source_dir, target_dir, from_naming, to_naming)
+        skipped_count = len(already_translated)
+        
+        if skipped_count > 0:
+            print(f"\n✓ Found {skipped_count} already translated file(s)")
+            print(f"  Will skip these and translate the remaining files\n")
+    
+    # Filter out already translated files
+    files_to_process = [f for f in all_files if f not in already_translated]
+    total_files = len(files_to_process)
+    
+    if is_resuming:
+        print(f"📝 Resuming translation:")
+        print(f"   Total files: {len(all_files)}")
+        print(f"   Already done: {len(already_translated)}")
+        print(f"   Remaining: {total_files}\n")
+    else:
+        print(f"\nFound {total_files} localization file(s) to process\n")
+    
+    if total_files == 0:
+        print("✓ All files already translated! Nothing to do.\n")
+        return
 
     file: Path
-    for file_index, file in enumerate(all_files, 1):
+    for file_index, file in enumerate(files_to_process, 1):
         try:
             filepath = os.path.dirname(os.path.abspath(file))
             filename = file.name  # Fixed: file.name is already just the filename

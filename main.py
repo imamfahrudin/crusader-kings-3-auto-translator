@@ -389,6 +389,10 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
 
     # Filter out already translated files
     files_to_process = [f for f in all_files if f not in already_translated]
+    
+    # Sort files by size (smallest first) for faster feedback and better rate limit management
+    files_to_process.sort(key=lambda f: os.path.getsize(f))
+    
     total_files = len(files_to_process)
 
     log(LINE_STR)
@@ -404,6 +408,7 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
 
     if total_files > 0:
         log("   📋 Translation queue: {} file(s)".format(total_files))
+        log("   📏 Processing order: Smallest files first (for faster feedback)")
         if do_translation:
             log("   🤖 AI translation: Enabled (Google Translate)")
             log("   ⚡ Batch size: {} lines per batch".format(BATCH_SIZE))

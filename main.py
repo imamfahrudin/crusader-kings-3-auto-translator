@@ -209,14 +209,16 @@ def process_zip_file(zip_file, config):
     target_dir = temp_dir / get_loc_code(False, config['to_language'])
     english_subdir = temp_dir / "english"
 
+    print(f"   📦 Zip file: {zip_file}")
+    print(f"   📂 Extracting to: {temp_dir}")
+
     # Check if we're resuming from previous run
     is_resuming = english_subdir.exists() and target_dir.exists()
-    
+
     if is_resuming:
-        print(f"\n🔄 Detected existing translation in progress!")
-        print(f"   Source folder: {english_subdir}")
-        print(f"   Target folder: {target_dir}")
-        print(f"   Will resume from where it left off...\n")
+        print(f"   🔄 Resume detected - continuing previous translation")
+        print(f"      Source: {english_subdir}")
+        print(f"      Target: {target_dir}")
     else:
         # Clean temp directories for fresh start
         if english_subdir.exists():
@@ -227,13 +229,15 @@ def process_zip_file(zip_file, config):
         target_dir.mkdir(parents=True, exist_ok=True)
 
         # Extract zip
-        print(f"📦 Extracting {zip_file}...")
+        print(f"   📦 Extracting {zip_file}...")
         if not extract_zip(zip_path, temp_dir):
+            print(f"   ❌ Failed to extract {zip_file}")
             return False
+        print(f"   ✅ Extraction completed")
 
     # Check if english folder exists (should exist from extraction or previous run)
     if not english_subdir.exists():
-        print(f"No 'english' folder found in {zip_file}")
+        print(f"   ❌ No 'english' folder found in {zip_file}")
         log_message(f"No 'english' folder in {zip_file}")
         return False
 
@@ -243,56 +247,62 @@ def process_zip_file(zip_file, config):
     from_naming = get_loc_code(True, from_language)
     to_naming = get_loc_code(False, to_language)
 
-    if not is_resuming:
-        print(f"\nProcessing: {zip_file}")
-        print(f"Translation: {from_language} → {to_language}\n")
+    print(f"   🚀 Starting translation process...")
+    print(f"      From: {from_language} ({from_naming})")
+    print(f"      To: {to_language} ({to_naming})")
+    print(f"      Mode: {'Translation enabled' if config['do_translation'] else 'Structure conversion only'}")
 
     try:
         init(english_subdir, target_dir, config['do_translation'], from_language, to_language, from_naming, to_naming, is_resuming)
 
         # Validate translation before zipping
+        print(f"   🔍 Validating translation results...")
         if not validate_translation(english_subdir, target_dir):
-            print(f"\n✗ Validation failed for {zip_file}")
+            print(f"   ❌ Validation failed for {zip_file}")
             return False
-        
+        print(f"   ✅ Validation passed")
+
         # Create output zip
         output_zip_name = zip_file.replace('.zip', f'_{to_language}.zip')
         output_zip_path = output_dir / output_zip_name
 
+        print(f"   📦 Creating output zip: {output_zip_name}")
         if create_zip(str(target_dir), str(output_zip_path), to_naming):
             # Move processed zip to processed folder or remove it
             processed_dir = Path(config['input_dir']) / "processed"
             processed_dir.mkdir(exist_ok=True)
             zip_path.rename(processed_dir / zip_file)
-            print(f"\n✓ Successfully processed {zip_file}")
-            
+            print(f"   ✅ Successfully processed {zip_file}")
+            print(f"      Output: {output_zip_path}")
+            print(f"      Moved to processed: {processed_dir / zip_file}")
+
             # Clear temp directory after successful processing
-            print(f"\nCleaning up temporary files...")
+            print(f"   🧹 Cleaning up temporary files...")
             if english_subdir.exists():
                 shutil.rmtree(english_subdir)
             if target_dir.exists():
                 shutil.rmtree(target_dir)
-            
+
             # Clean up manual translations CSV if it exists
             csv_path = temp_dir / "manual_translations.csv"
             if csv_path.exists():
                 csv_path.unlink()
-                print(f"✓ Cleaned up manual translations CSV")
-            
-            print(f"✓ Temp directory cleared\n")
-            
+                print(f"      ✓ Cleaned up manual translations CSV")
+
+            print(f"   ✅ Cleanup completed")
             return True
         else:
+            print(f"   ❌ Failed to create output zip")
             return False
 
     except TranslationRateLimitError:
         # Exit the entire application on rate limiting
-        print(f"🚨 FATAL: Google Translate rate limit exceeded while processing {zip_file}")
-        print(f"   Application will now exit to prevent further charges or bans")
+        print(f"   🚨 FATAL: Google Translate rate limit exceeded")
+        print(f"      Application will now exit to prevent further charges or bans")
         log_message(f"FATAL RATE LIMIT - APPLICATION EXITING")
         exit(1)
     except Exception as e:
-        print(f"Error processing {zip_file}: {e}")
+        print(f"   ❌ Error processing {zip_file}: {e}")
         log_message(f"Processing error for {zip_file}: {e}")
         return False
 
@@ -304,27 +314,37 @@ def watch_and_process(config):
     Path(config['temp_dir']).mkdir(exist_ok=True)
     Path(config['output_dir']).mkdir(exist_ok=True)
 
-    print("Starting Crusader Kings 3 Auto Translator")
-    print(f"Processing zip files from {input_dir}")
-    print(f"Target language: {config['to_language']}")
+    print("🚀 Starting Crusader Kings 3 Auto Translator")
+    print(f"📁 Input directory: {input_dir}")
+    print(f"📁 Temp directory: {config['temp_dir']}")
+    print(f"📁 Output directory: {config['output_dir']}")
+    print(f"🌐 Translation: {config['from_language']} → {config['to_language']}")
+    print(f"⚙️  Translation enabled: {config['do_translation']}")
+    print(f"⏰ Check interval: {config['check_interval']} seconds")
+    print(LINE_STR)
 
     try:
         # Look for zip files
         zip_files = list(input_dir.glob("*.zip"))
         if zip_files:
+            print(f"📦 Found {len(zip_files)} zip file(s) to process:")
             for zip_file in zip_files:
-                print(f"Found zip file: {zip_file.name}")
+                print(f"   • {zip_file.name}")
+            print(LINE_STR)
+
+            for zip_file in zip_files:
+                print(f"\n🔄 Processing: {zip_file.name}")
                 process_zip_file(zip_file.name, config)
-            print(f"\nProcessing complete! Processed {len(zip_files)} file(s)")
+            print(f"\n✅ Processing complete! Processed {len(zip_files)} file(s)")
         else:
-            print("No zip files found in input directory")
+            print("❌ No zip files found in input directory")
 
     except Exception as e:
-        print(f"Error in processing: {e}")
+        print(f"❌ Error in processing: {e}")
         log_message(f"Processing error: {e}")
         raise
 
-    print("Application finished")
+    print("🏁 Application finished")
 
 
 def init(source_dir, target_dir, do_translation, from_language, to_language, from_naming, to_naming, is_resuming=False):
@@ -332,35 +352,60 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
     temp_dir = os.environ.get('TEMP_DIR', '/app/temp')
     os.environ['TEMP_DIR'] = temp_dir
 
+    print("🔍 Analyzing localization files...")
+    print(f"   Source directory: {source_dir}")
+    print(f"   Target directory: {target_dir}")
+    print(f"   Translation mode: {'Enabled' if do_translation else 'Disabled (file structure only)'}")
+    print(f"   Language pair: {from_language} ({from_naming}) → {to_language} ({to_naming})")
+
     INPUT_DIR = source_dir
-    
+
     # Get all yml files
     all_files = list(INPUT_DIR.rglob("*.yml*"))
-    
+    total_files_found = len(all_files)
+
+    print(f"   📊 Total YAML files found: {total_files_found}")
+
     # Get already translated files if resuming
     already_translated = set()
     if is_resuming:
         already_translated = get_already_translated_files(source_dir, target_dir, from_naming, to_naming)
         skipped_count = len(already_translated)
-        
+
         if skipped_count > 0:
-            print(f"\n✓ Found {skipped_count} already translated file(s)")
-            print(f"  Will skip these and translate the remaining files\n")
-    
+            print(f"   🔄 Resume mode: Found {skipped_count} already translated file(s)")
+            print(f"   ⏭️  Will skip these and continue with remaining files")
+        else:
+            print(f"   🔄 Resume mode: No previously translated files found")
+
     # Filter out already translated files
     files_to_process = [f for f in all_files if f not in already_translated]
     total_files = len(files_to_process)
-    
+
+    print(LINE_STR)
     if is_resuming:
-        print(f"📝 Resuming translation:")
-        print(f"   Total files: {len(all_files)}")
-        print(f"   Already done: {len(already_translated)}")
-        print(f"   Remaining: {total_files}\n")
+        print(f"📝 TRANSLATION RESUME SUMMARY:")
+        print(f"   📁 Total files in source: {total_files_found}")
+        print(f"   ✅ Already translated: {len(already_translated)}")
+        print(f"   🔄 Remaining to process: {total_files}")
     else:
-        print(f"\nFound {total_files} localization file(s) to process\n")
-    
+        print(f"📝 TRANSLATION INITIATION SUMMARY:")
+        print(f"   📁 Files to process: {total_files}")
+        print(f"   🎯 Target language: {to_language} ({to_naming})")
+
+    if total_files > 0:
+        print(f"   📋 Translation queue: {total_files} file(s)")
+        if do_translation:
+            print(f"   🤖 AI translation: Enabled (Google Translate)")
+            print(f"   ⚡ Batch size: {BATCH_SIZE} lines per batch")
+            print(f"   🛡️  Rate limiting: 4 requests/second max")
+        else:
+            print(f"   📋 File structure conversion only (no translation)")
+    print(LINE_STR)
+
     if total_files == 0:
-        print("✓ All files already translated! Nothing to do.\n")
+        print("✅ All files already translated! Nothing to do.")
+        print(LINE_STR)
         return
 
     file: Path
@@ -371,15 +416,15 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
 
             # replace text in file
             with open(file, 'r', encoding="utf-8") as f_r:
-                print(f"[{file_index}/{total_files}] Processing: {file.name}")
+                print(f"[{file_index}/{total_files}] 🔄 Processing: {file.name}")
 
                 file_data = f_r.readlines()
-                
+
                 # Check if file has content
                 if not file_data:
-                    print("  Warning: Empty file, skipping...")
+                    print(f"   ⚠️  Warning: Empty file, skipping...")
                     continue
-                
+
                 file_data[0] = file_data[0].replace(from_naming, to_naming)
                 if do_translation:
                     failed_translations = translate(file_data, from_language, to_language, filename, str(file))
@@ -387,13 +432,23 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
                     if failed_translations:
                         write_failed_translations_to_csv(failed_translations)
                 tofile(filepath, filename, file_data, from_naming, to_naming)
-                print(f"  ✓ Completed: {file.name}\n")
-        
+                print(f"   ✅ Completed: {file.name}")
+
         except TranslationRateLimitError:
             # Re-raise rate limiting errors to stop the application
             raise
         except Exception as e:
-            print(f"  ✗ Error processing file {file.name}: {str(e)}\n")
+            print(f"   ❌ Error processing file {file.name}: {str(e)}\n")
+
+    # Add completion summary
+    if total_files > 0:
+        print(LINE_STR)
+        print(f"🎉 Translation phase completed!")
+        print(f"   📊 Files processed: {total_files}")
+        print(f"   🎯 Language: {from_language} → {to_language}")
+        if do_translation:
+            print(f"   🤖 Translation method: Google Translate API")
+        print(LINE_STR)
 
 
 def tofile(filepath, filename, file_data, from_naming, to_naming):
@@ -557,10 +612,12 @@ def translate(file_data, from_language, to_language, filename="", file_path=""):
             })
     
     if not translation_queue:
-        print("  No translatable lines found")
+        print("     No translatable lines found")
         return
     
-    print(f"  Translating {len(translation_queue)} line(s)...")
+    print(f"     📝 Translating {len(translation_queue)} text line(s)...")
+    print(f"     ⚡ Batch processing: {BATCH_SIZE} lines per batch")
+    print(f"     🛡️  Rate limit protection: 4 requests/second max")
     
     # Process in batches
     total_lines = len(translation_queue)
@@ -623,9 +680,14 @@ def translate(file_data, from_language, to_language, filename="", file_path=""):
                     log_message(f"Skipped translation for: {item['original']}")
             
             progress_percent = int((batch_end / total_lines) * 100)
-            print(f"  Progress: {batch_end}/{total_lines} lines ({progress_percent}%)")
+            print(f"     📊 Progress: {batch_end}/{total_lines} lines ({progress_percent}%)")
         
-        print(f"  Translation complete: {total_lines} line(s) processed")
+        success_rate = ((total_lines - len(failed_translations)) / total_lines) * 100 if total_lines > 0 else 100
+        print(f"     ✅ Translation complete: {total_lines} line(s) processed")
+        print(f"     📈 Success rate: {success_rate:.1f}% ({total_lines - len(failed_translations)}/{total_lines} successful)")
+        
+        if failed_translations:
+            print(f"     ⚠️  Failed translations: {len(failed_translations)} (saved to manual_translations.csv)")
         
         # Return failed translations for caller to handle
         return failed_translations

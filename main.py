@@ -121,6 +121,14 @@ def create_zip(source_dir, zip_path, target_language):
             shutil.rmtree(target_folder)
         shutil.copytree(source_dir, target_folder)
         
+        # Check for manual translations CSV and include it if it exists
+        temp_dir = Path(source_dir).parent
+        csv_path = temp_dir / "manual_translations.csv"
+        if csv_path.exists():
+            # Copy CSV to the target language folder
+            shutil.copy2(csv_path, target_folder / "manual_translations.csv")
+            print(f"Included manual translations CSV in output zip")
+        
         # Create zip with the folder structure
         shutil.make_archive(zip_path.replace('.zip', ''), 'zip', temp_zip_dir)
         
@@ -264,6 +272,13 @@ def process_zip_file(zip_file, config):
                 shutil.rmtree(english_subdir)
             if target_dir.exists():
                 shutil.rmtree(target_dir)
+            
+            # Clean up manual translations CSV if it exists
+            csv_path = temp_dir / "manual_translations.csv"
+            if csv_path.exists():
+                csv_path.unlink()
+                print(f"✓ Cleaned up manual translations CSV")
+            
             print(f"✓ Temp directory cleared\n")
             
             return True
@@ -367,7 +382,7 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
                 
                 file_data[0] = file_data[0].replace(from_naming, to_naming)
                 if do_translation:
-                    translate(file_data, from_language, to_language, filename)
+                    translate(file_data, from_language, to_language, filename, str(file))
                 tofile(filepath, filename, file_data, from_naming, to_naming)
                 print(f"  ✓ Completed: {file.name}\n")
         
@@ -411,10 +426,13 @@ def tofile(filepath, filename, file_data, from_naming, to_naming):
 
 
 def translate_single(text, from_language, to_language):
-    """Translate a single text, returning original on failure"""
+    """Translate a single text, returning translation and failure status"""
     try:
         trans = GoogleTranslator(source=from_language, target=to_language).translate(text)
-        return trans if trans else text
+        if trans:
+            return trans, False  # Success: (translated_text, failed=False)
+        else:
+            return text, True    # No translation found: (original_text, failed=True)
     except Exception as e:
         error_msg = str(e)
         # Check for rate limiting error (any rate limit violation)
@@ -424,13 +442,13 @@ def translate_single(text, from_language, to_language):
             raise TranslationRateLimitError(f"Google Translate rate limit exceeded: {error_msg}")
         
         print(f"Translation failed for '{text}': {e}")
-        return text
+        return text, True  # Failed: (original_text, failed=True)
 
 
 def translate_batch(texts, from_language, to_language, delay):
     """
     Translate a batch of texts in parallel.
-    Returns tuple of (translations_list, new_delay, success_flag)
+    Returns tuple of (translations_list, failed_translations_list, success_flag)
     """
     try:
         if DEBUG:
@@ -438,12 +456,24 @@ def translate_batch(texts, from_language, to_language, delay):
         
         # Translate in parallel using ThreadPoolExecutor
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(texts), 10)) as executor:
-            translations = list(executor.map(
+            results = list(executor.map(
                 lambda t: translate_single(t, from_language, to_language), 
                 texts
             ))
         
-        return translations, 0, True
+        # Separate translations and failures
+        translations = []
+        failed_translations = []
+        
+        for i, (text, failed) in enumerate(results):
+            if failed:
+                failed_translations.append(texts[i])  # Store original filtered text
+                translations.append(texts[i])  # Keep original text for failed translations
+            else:
+                translations.append(text)  # Store successful translation
+        
+        success = len(failed_translations) == 0
+        return translations, failed_translations, success
         
     except TranslationRateLimitError:
         # Re-raise rate limiting errors to stop the application
@@ -452,11 +482,44 @@ def translate_batch(texts, from_language, to_language, delay):
         print(f'Error during batch translation: {str(e)}')
         log_message(f"Batch translation error: {str(e)}")
         
-        # Return original texts with failure flag
-        return texts, 0, False
+        # Return original texts with all marked as failed
+        return texts, texts, False
 
 
-def translate(file_data, from_language, to_language, filename=""):
+def write_failed_translations_to_csv(failed_translations):
+    """Write failed translations to CSV file in temp directory"""
+    try:
+        import csv
+        temp_dir = Path(os.environ.get('TEMP_DIR', '/app/temp'))
+        csv_path = temp_dir / "manual_translations.csv"
+        
+        # Check if file exists to determine if we need to write header
+        file_exists = csv_path.exists()
+        
+        with open(csv_path, 'a', encoding='utf-8', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(["file_path", "line_number", "original_text", "translated_text"])
+            
+            # Write failed translations
+            for failure in failed_translations:
+                writer.writerow([
+                    failure['file_path'],
+                    failure['line_number'],
+                    failure['original_text'],
+                    ""  # Empty translated_text field for manual filling
+                ])
+        
+        print(f"  📝 Recorded {len(failed_translations)} failed translation(s) to {csv_path}")
+        
+    except Exception as e:
+        print(f"Error writing failed translations to CSV: {e}")
+        log_message(f"CSV write error: {e}")
+
+
+def translate(file_data, from_language, to_language, filename="", file_path=""):
     """Translate file data with batching and adaptive rate limiting"""
     
     # Collect all translatable lines with their indices
@@ -485,6 +548,7 @@ def translate(file_data, from_language, to_language, filename=""):
     
     # Process in batches
     total_lines = len(translation_queue)
+    failed_translations = []
     
     try:
         for batch_start in range(0, total_lines, BATCH_SIZE):
@@ -495,17 +559,29 @@ def translate(file_data, from_language, to_language, filename=""):
             texts_to_translate = [item['filtered'] for item in batch]
             
             # Translate batch
-            translations, _, success = translate_batch(
+            translations, batch_failures, success = translate_batch(
                 texts_to_translate, 
                 from_language, 
                 to_language, 
                 0  # No delay
             )
             
+            # Collect failed translations with context
+            for failure_text in batch_failures:
+                # Find the corresponding item in the batch
+                for item in batch:
+                    if item['filtered'] == failure_text:
+                        failed_translations.append({
+                            'file_path': file_path,
+                            'line_number': item['line_index'] + 1,  # +1 because we skip first line
+                            'original_text': item['original']
+                        })
+                        break
+            
             # Apply translations back to file_data
             for item, translated_text in zip(batch, translations):
                 # Only restore tokens and update if translation was successful
-                if success:
+                if item['filtered'] not in batch_failures:
                     # Restore tokens
                     padded_translation = translated_text
                     for token in item['tokens']:
@@ -534,6 +610,10 @@ def translate(file_data, from_language, to_language, filename=""):
             print(f"  Progress: {batch_end}/{total_lines} lines ({progress_percent}%)")
         
         print(f"  Translation complete: {total_lines} line(s) processed")
+        
+        # Write failed translations to CSV if any
+        if failed_translations:
+            write_failed_translations_to_csv(failed_translations)
     
     except TranslationRateLimitError:
         # Re-raise rate limiting errors to stop the application

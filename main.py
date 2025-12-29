@@ -10,6 +10,11 @@ import json
 import shutil
 from deep_translator import GoogleTranslator
 
+# Custom exception for rate limiting
+class TranslationRateLimitError(Exception):
+    """Raised when Google Translate rate limit is exceeded"""
+    pass
+
 # ---------------------------------------------------
 DEBUG = False
 INFO = False
@@ -265,6 +270,12 @@ def process_zip_file(zip_file, config):
         else:
             return False
 
+    except TranslationRateLimitError:
+        # Exit the entire application on rate limiting
+        print(f"🚨 FATAL: Google Translate rate limit exceeded while processing {zip_file}")
+        print(f"   Application will now exit to prevent further charges or bans")
+        log_message(f"FATAL RATE LIMIT - APPLICATION EXITING")
+        exit(1)
     except Exception as e:
         print(f"Error processing {zip_file}: {e}")
         log_message(f"Processing error for {zip_file}: {e}")
@@ -360,6 +371,9 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
                 tofile(filepath, filename, file_data, from_naming, to_naming)
                 print(f"  ✓ Completed: {file.name}\n")
         
+        except TranslationRateLimitError:
+            # Re-raise rate limiting errors to stop the application
+            raise
         except Exception as e:
             print(f"  ✗ Error processing file {file.name}: {str(e)}\n")
 
@@ -402,6 +416,13 @@ def translate_single(text, from_language, to_language):
         trans = GoogleTranslator(source=from_language, target=to_language).translate(text)
         return trans if trans else text
     except Exception as e:
+        error_msg = str(e)
+        # Check for rate limiting error (any rate limit violation)
+        if "You made too many requests to the server" in error_msg:
+            print(f"🚨 RATE LIMIT EXCEEDED: {error_msg}")
+            log_message(f"RATE LIMIT EXCEEDED: {error_msg}")
+            raise TranslationRateLimitError(f"Google Translate rate limit exceeded: {error_msg}")
+        
         print(f"Translation failed for '{text}': {e}")
         return text
 
@@ -424,6 +445,9 @@ def translate_batch(texts, from_language, to_language, delay):
         
         return translations, 0, True
         
+    except TranslationRateLimitError:
+        # Re-raise rate limiting errors to stop the application
+        raise
     except Exception as e:
         print(f'Error during batch translation: {str(e)}')
         log_message(f"Batch translation error: {str(e)}")
@@ -462,53 +486,60 @@ def translate(file_data, from_language, to_language, filename=""):
     # Process in batches
     total_lines = len(translation_queue)
     
-    for batch_start in range(0, total_lines, BATCH_SIZE):
-        batch_end = min(batch_start + BATCH_SIZE, total_lines)
-        batch = translation_queue[batch_start:batch_end]
+    try:
+        for batch_start in range(0, total_lines, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total_lines)
+            batch = translation_queue[batch_start:batch_end]
+            
+            # Extract texts to translate
+            texts_to_translate = [item['filtered'] for item in batch]
+            
+            # Translate batch
+            translations, _, success = translate_batch(
+                texts_to_translate, 
+                from_language, 
+                to_language, 
+                0  # No delay
+            )
+            
+            # Apply translations back to file_data
+            for item, translated_text in zip(batch, translations):
+                # Only restore tokens and update if translation was successful
+                if success:
+                    # Restore tokens
+                    padded_translation = translated_text
+                    for token in item['tokens']:
+                        padded_translation = padded_translation.replace(REPLACER, token, 1)
+                    
+                    # Update file data
+                    original_line = file_data[item['line_index']]
+                    file_data[item['line_index']] = original_line.replace(
+                        "\"" + item['original'] + "\"", 
+                        "\"" + padded_translation + "\"", 
+                        1
+                    )
+                    
+                    if INFO:
+                        print(f"{item['original']} <- {padded_translation}")
+                    
+                    if DEBUG:
+                        print(f"Line #{item['line_num']}: {padded_translation}")
+                else:
+                    # On error, keep original text (no translation)
+                    if INFO or DEBUG:
+                        print(f"Skipped line #{item['line_num']}: {item['original']} (translation failed)")
+                    log_message(f"Skipped translation for: {item['original']}")
+            
+            progress_percent = int((batch_end / total_lines) * 100)
+            print(f"  Progress: {batch_end}/{total_lines} lines ({progress_percent}%)")
         
-        # Extract texts to translate
-        texts_to_translate = [item['filtered'] for item in batch]
-        
-        # Translate batch
-        translations, _, success = translate_batch(
-            texts_to_translate, 
-            from_language, 
-            to_language, 
-            0  # No delay
-        )
-        
-        # Apply translations back to file_data
-        for item, translated_text in zip(batch, translations):
-            # Only restore tokens and update if translation was successful
-            if success:
-                # Restore tokens
-                padded_translation = translated_text
-                for token in item['tokens']:
-                    padded_translation = padded_translation.replace(REPLACER, token, 1)
-                
-                # Update file data
-                original_line = file_data[item['line_index']]
-                file_data[item['line_index']] = original_line.replace(
-                    "\"" + item['original'] + "\"", 
-                    "\"" + padded_translation + "\"", 
-                    1
-                )
-                
-                if INFO:
-                    print(f"{item['original']} <- {padded_translation}")
-                
-                if DEBUG:
-                    print(f"Line #{item['line_num']}: {padded_translation}")
-            else:
-                # On error, keep original text (no translation)
-                if INFO or DEBUG:
-                    print(f"Skipped line #{item['line_num']}: {item['original']} (translation failed)")
-                log_message(f"Skipped translation for: {item['original']}")
-        
-        progress_percent = int((batch_end / total_lines) * 100)
-        print(f"  Progress: {batch_end}/{total_lines} lines ({progress_percent}%)")
+        print(f"  Translation complete: {total_lines} line(s) processed")
     
-    print(f"  Translation complete: {total_lines} line(s) processed")
+    except TranslationRateLimitError:
+        # Re-raise rate limiting errors to stop the application
+        print(f"🚨 ABORTING FILE {filename} DUE TO RATE LIMIT")
+        log_message(f"RATE LIMIT EXCEEDED - ABORTING FILE {filename}")
+        raise
 
 
 if __name__ == "__main__":

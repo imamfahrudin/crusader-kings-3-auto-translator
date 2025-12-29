@@ -8,6 +8,7 @@ import concurrent.futures
 import zipfile
 import json
 import shutil
+import sys
 from deep_translator import GoogleTranslator
 
 # Custom exception for rate limiting
@@ -46,7 +47,7 @@ def load_config():
     """Load configuration from config.json"""
     config_path = Path("config.json")
     if not config_path.exists():
-        print("config.json not found, using defaults")
+        log("config.json not found, using defaults")
         return {
             "from_language": "en",
             "to_language": "de",
@@ -75,6 +76,14 @@ def log_message(message, sign_t=True):
         print("[{}] {}".format(timestamp, message))
     else:
         print("{}".format(message))
+    sys.stdout.flush()  # Force immediate flush for Docker logging
+
+
+def log(message):
+    """Print log message with timestamp and immediate flush for Docker compatibility"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("[{}] {}".format(timestamp, message))
+    sys.stdout.flush()
 
 
 def extract_zip(zip_path, extract_to):
@@ -209,16 +218,16 @@ def process_zip_file(zip_file, config):
     target_dir = temp_dir / get_loc_code(False, config['to_language'])
     english_subdir = temp_dir / "english"
 
-    print(f"   📦 Zip file: {zip_file}")
-    print(f"   📂 Extracting to: {temp_dir}")
+    log("   📦 Zip file: {}".format(zip_file))
+    log("   📂 Extracting to: {}".format(temp_dir))
 
     # Check if we're resuming from previous run
     is_resuming = english_subdir.exists() and target_dir.exists()
 
     if is_resuming:
-        print(f"   🔄 Resume detected - continuing previous translation")
-        print(f"      Source: {english_subdir}")
-        print(f"      Target: {target_dir}")
+        log("   🔄 Resume detected - continuing previous translation")
+        log("      Source: {}".format(english_subdir))
+        log("      Target: {}".format(target_dir))
     else:
         # Clean temp directories for fresh start
         if english_subdir.exists():
@@ -229,16 +238,16 @@ def process_zip_file(zip_file, config):
         target_dir.mkdir(parents=True, exist_ok=True)
 
         # Extract zip
-        print(f"   📦 Extracting {zip_file}...")
+        log("   📦 Extracting {}...".format(zip_file))
         if not extract_zip(zip_path, temp_dir):
-            print(f"   ❌ Failed to extract {zip_file}")
+            log("   ❌ Failed to extract {}".format(zip_file))
             return False
-        print(f"   ✅ Extraction completed")
+        log("   ✅ Extraction completed")
 
     # Check if english folder exists (should exist from extraction or previous run)
     if not english_subdir.exists():
-        print(f"   ❌ No 'english' folder found in {zip_file}")
-        log_message(f"No 'english' folder in {zip_file}")
+        log("   ❌ No 'english' folder found in {}".format(zip_file))
+        log_message("No 'english' folder in {}".format(zip_file))
         return False
 
     # Process files
@@ -247,37 +256,37 @@ def process_zip_file(zip_file, config):
     from_naming = get_loc_code(True, from_language)
     to_naming = get_loc_code(False, to_language)
 
-    print(f"   🚀 Starting translation process...")
-    print(f"      From: {from_language} ({from_naming})")
-    print(f"      To: {to_language} ({to_naming})")
-    print(f"      Mode: {'Translation enabled' if config['do_translation'] else 'Structure conversion only'}")
+    log("   🚀 Starting translation process...")
+    log("      From: {} ({})".format(from_language, from_naming))
+    log("      To: {} ({})".format(to_language, to_naming))
+    log("      Mode: {}".format('Translation enabled' if config['do_translation'] else 'Structure conversion only'))
 
     try:
         init(english_subdir, target_dir, config['do_translation'], from_language, to_language, from_naming, to_naming, is_resuming)
 
         # Validate translation before zipping
-        print(f"   🔍 Validating translation results...")
+        log("   🔍 Validating translation results...")
         if not validate_translation(english_subdir, target_dir):
-            print(f"   ❌ Validation failed for {zip_file}")
+            log("   ❌ Validation failed for {}".format(zip_file))
             return False
-        print(f"   ✅ Validation passed")
+        log("   ✅ Validation passed")
 
         # Create output zip
-        output_zip_name = zip_file.replace('.zip', f'_{to_language}.zip')
+        output_zip_name = zip_file.replace('.zip', '_{}.zip'.format(to_language))
         output_zip_path = output_dir / output_zip_name
 
-        print(f"   📦 Creating output zip: {output_zip_name}")
+        log("   📦 Creating output zip: {}".format(output_zip_name))
         if create_zip(str(target_dir), str(output_zip_path), to_naming):
             # Move processed zip to processed folder or remove it
             processed_dir = Path(config['input_dir']) / "processed"
             processed_dir.mkdir(exist_ok=True)
             zip_path.rename(processed_dir / zip_file)
-            print(f"   ✅ Successfully processed {zip_file}")
-            print(f"      Output: {output_zip_path}")
-            print(f"      Moved to processed: {processed_dir / zip_file}")
+            log("   ✅ Successfully processed {}".format(zip_file))
+            log("      Output: {}".format(output_zip_path))
+            log("      Moved to processed: {}".format(processed_dir / zip_file))
 
             # Clear temp directory after successful processing
-            print(f"   🧹 Cleaning up temporary files...")
+            log("   🧹 Cleaning up temporary files...")
             if english_subdir.exists():
                 shutil.rmtree(english_subdir)
             if target_dir.exists():
@@ -287,23 +296,23 @@ def process_zip_file(zip_file, config):
             csv_path = temp_dir / "manual_translations.csv"
             if csv_path.exists():
                 csv_path.unlink()
-                print(f"      ✓ Cleaned up manual translations CSV")
+                log("      ✓ Cleaned up manual translations CSV")
 
-            print(f"   ✅ Cleanup completed")
+            log("   ✅ Cleanup completed")
             return True
         else:
-            print(f"   ❌ Failed to create output zip")
+            log("   ❌ Failed to create output zip")
             return False
 
     except TranslationRateLimitError:
         # Exit the entire application on rate limiting
-        print(f"   🚨 FATAL: Google Translate rate limit exceeded")
-        print(f"      Application will now exit to prevent further charges or bans")
-        log_message(f"FATAL RATE LIMIT - APPLICATION EXITING")
+        log("   🚨 FATAL: Google Translate rate limit exceeded")
+        log("      Application will now exit to prevent further charges or bans")
+        log_message("FATAL RATE LIMIT - APPLICATION EXITING")
         exit(1)
     except Exception as e:
-        print(f"   ❌ Error processing {zip_file}: {e}")
-        log_message(f"Processing error for {zip_file}: {e}")
+        log("   ❌ Error processing {}: {}".format(zip_file, e))
+        log_message("Processing error for {}: {}".format(zip_file, e))
         return False
 
 
@@ -314,37 +323,37 @@ def watch_and_process(config):
     Path(config['temp_dir']).mkdir(exist_ok=True)
     Path(config['output_dir']).mkdir(exist_ok=True)
 
-    print("🚀 Starting Crusader Kings 3 Auto Translator")
-    print(f"📁 Input directory: {input_dir}")
-    print(f"📁 Temp directory: {config['temp_dir']}")
-    print(f"📁 Output directory: {config['output_dir']}")
-    print(f"🌐 Translation: {config['from_language']} → {config['to_language']}")
-    print(f"⚙️  Translation enabled: {config['do_translation']}")
-    print(f"⏰ Check interval: {config['check_interval']} seconds")
-    print(LINE_STR)
+    log("🚀 Starting Crusader Kings 3 Auto Translator")
+    log("📁 Input directory: {}".format(input_dir))
+    log("📁 Temp directory: {}".format(config['temp_dir']))
+    log("📁 Output directory: {}".format(config['output_dir']))
+    log("🌐 Translation: {} → {}".format(config['from_language'], config['to_language']))
+    log("⚙️  Translation enabled: {}".format(config['do_translation']))
+    log("⏰ Check interval: {} seconds".format(config['check_interval']))
+    log(LINE_STR)
 
     try:
         # Look for zip files
         zip_files = list(input_dir.glob("*.zip"))
         if zip_files:
-            print(f"📦 Found {len(zip_files)} zip file(s) to process:")
+            log("📦 Found {} zip file(s) to process:".format(len(zip_files)))
             for zip_file in zip_files:
-                print(f"   • {zip_file.name}")
-            print(LINE_STR)
+                log("   • {}".format(zip_file.name))
+            log(LINE_STR)
 
             for zip_file in zip_files:
-                print(f"\n🔄 Processing: {zip_file.name}")
+                log("\n🔄 Processing: {}".format(zip_file.name))
                 process_zip_file(zip_file.name, config)
-            print(f"\n✅ Processing complete! Processed {len(zip_files)} file(s)")
+            log("\n✅ Processing complete! Processed {} file(s)".format(len(zip_files)))
         else:
-            print("❌ No zip files found in input directory")
+            log("❌ No zip files found in input directory")
 
     except Exception as e:
-        print(f"❌ Error in processing: {e}")
-        log_message(f"Processing error: {e}")
+        log("❌ Error in processing: {}".format(e))
+        log_message("Processing error: {}".format(e))
         raise
 
-    print("🏁 Application finished")
+    log("🏁 Application finished")
 
 
 def init(source_dir, target_dir, do_translation, from_language, to_language, from_naming, to_naming, is_resuming=False):
@@ -352,11 +361,11 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
     temp_dir = os.environ.get('TEMP_DIR', '/app/temp')
     os.environ['TEMP_DIR'] = temp_dir
 
-    print("🔍 Analyzing localization files...")
-    print(f"   Source directory: {source_dir}")
-    print(f"   Target directory: {target_dir}")
-    print(f"   Translation mode: {'Enabled' if do_translation else 'Disabled (file structure only)'}")
-    print(f"   Language pair: {from_language} ({from_naming}) → {to_language} ({to_naming})")
+    log("🔍 Analyzing localization files...")
+    log("   Source directory: {}".format(source_dir))
+    log("   Target directory: {}".format(target_dir))
+    log("   Translation mode: {}".format('Enabled' if do_translation else 'Disabled (file structure only)'))
+    log("   Language pair: {} ({}) → {} ({})".format(from_language, from_naming, to_language, to_naming))
 
     INPUT_DIR = source_dir
 
@@ -364,7 +373,7 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
     all_files = list(INPUT_DIR.rglob("*.yml*"))
     total_files_found = len(all_files)
 
-    print(f"   📊 Total YAML files found: {total_files_found}")
+    log("   📊 Total YAML files found: {}".format(total_files_found))
 
     # Get already translated files if resuming
     already_translated = set()
@@ -373,39 +382,39 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
         skipped_count = len(already_translated)
 
         if skipped_count > 0:
-            print(f"   🔄 Resume mode: Found {skipped_count} already translated file(s)")
-            print(f"   ⏭️  Will skip these and continue with remaining files")
+            log("   🔄 Resume mode: Found {} already translated file(s)".format(skipped_count))
+            log("   ⏭️  Will skip these and continue with remaining files")
         else:
-            print(f"   🔄 Resume mode: No previously translated files found")
+            log("   🔄 Resume mode: No previously translated files found")
 
     # Filter out already translated files
     files_to_process = [f for f in all_files if f not in already_translated]
     total_files = len(files_to_process)
 
-    print(LINE_STR)
+    log(LINE_STR)
     if is_resuming:
-        print(f"📝 TRANSLATION RESUME SUMMARY:")
-        print(f"   📁 Total files in source: {total_files_found}")
-        print(f"   ✅ Already translated: {len(already_translated)}")
-        print(f"   🔄 Remaining to process: {total_files}")
+        log("📝 TRANSLATION RESUME SUMMARY:")
+        log("   📁 Total files in source: {}".format(total_files_found))
+        log("   ✅ Already translated: {}".format(len(already_translated)))
+        log("   🔄 Remaining to process: {}".format(total_files))
     else:
-        print(f"📝 TRANSLATION INITIATION SUMMARY:")
-        print(f"   📁 Files to process: {total_files}")
-        print(f"   🎯 Target language: {to_language} ({to_naming})")
+        log("📝 TRANSLATION INITIATION SUMMARY:")
+        log("   📁 Files to process: {}".format(total_files))
+        log("   🎯 Target language: {} ({})".format(to_language, to_naming))
 
     if total_files > 0:
-        print(f"   📋 Translation queue: {total_files} file(s)")
+        log("   📋 Translation queue: {} file(s)".format(total_files))
         if do_translation:
-            print(f"   🤖 AI translation: Enabled (Google Translate)")
-            print(f"   ⚡ Batch size: {BATCH_SIZE} lines per batch")
-            print(f"   🛡️  Rate limiting: 4 requests/second max")
+            log("   🤖 AI translation: Enabled (Google Translate)")
+            log("   ⚡ Batch size: {} lines per batch".format(BATCH_SIZE))
+            log("   🛡️  Rate limiting: 4 requests/second max")
         else:
-            print(f"   📋 File structure conversion only (no translation)")
-    print(LINE_STR)
+            log("   📋 File structure conversion only (no translation)")
+    log(LINE_STR)
 
     if total_files == 0:
-        print("✅ All files already translated! Nothing to do.")
-        print(LINE_STR)
+        log("✅ All files already translated! Nothing to do.")
+        log(LINE_STR)
         return
 
     file: Path
@@ -416,13 +425,13 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
 
             # replace text in file
             with open(file, 'r', encoding="utf-8") as f_r:
-                print(f"[{file_index}/{total_files}] 🔄 Processing: {file.name}")
+                log("[{}/{}] 🔄 Processing: {}".format(file_index, total_files, file.name))
 
                 file_data = f_r.readlines()
 
                 # Check if file has content
                 if not file_data:
-                    print(f"   ⚠️  Warning: Empty file, skipping...")
+                    log("   ⚠️  Warning: Empty file, skipping...")
                     continue
 
                 file_data[0] = file_data[0].replace(from_naming, to_naming)
@@ -432,23 +441,23 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
                     if failed_translations:
                         write_failed_translations_to_csv(failed_translations)
                 tofile(filepath, filename, file_data, from_naming, to_naming)
-                print(f"   ✅ Completed: {file.name}")
+                log("   ✅ Completed: {}".format(file.name))
 
         except TranslationRateLimitError:
             # Re-raise rate limiting errors to stop the application
             raise
         except Exception as e:
-            print(f"   ❌ Error processing file {file.name}: {str(e)}\n")
+            log("   ❌ Error processing file {}: {}".format(file.name, str(e)))
 
     # Add completion summary
     if total_files > 0:
-        print(LINE_STR)
-        print(f"🎉 Translation phase completed!")
-        print(f"   📊 Files processed: {total_files}")
-        print(f"   🎯 Language: {from_language} → {to_language}")
+        log(LINE_STR)
+        log("🎉 Translation phase completed!")
+        log("   📊 Files processed: {}".format(total_files))
+        log("   🎯 Language: {} → {}".format(from_language, to_language))
         if do_translation:
-            print(f"   🤖 Translation method: Google Translate API")
-        print(LINE_STR)
+            log("   🤖 Translation method: Google Translate API")
+        log(LINE_STR)
 
 
 def tofile(filepath, filename, file_data, from_naming, to_naming):
@@ -700,6 +709,7 @@ def translate(file_data, from_language, to_language, filename="", file_path=""):
 
 
 if __name__ == "__main__":
+    log("🚀 Application starting...")
     args = parseargs()
     config = load_config()
     watch_and_process(config)

@@ -22,7 +22,7 @@ translator = None
 RE_PATTERN = re.compile(r'\[[^"\]]*]|\$[^$]+\$|#[^$]+#|\\n|@[^!]+!')
 REPLACER = '{@}'
 LINE_STR = '-----------------------------------------'
-BATCH_SIZE = 20  # Translate 20 lines at once
+BATCH_SIZE = 25  # Translate 25 lines at once (safe with 0.25s delays)
 # ---------------------------------------------------
 
 def get_loc_code(from_l: bool, pars_arg: str):
@@ -447,41 +447,50 @@ def translate_single(text, from_language, to_language):
 
 def translate_batch(texts, from_language, to_language, delay):
     """
-    Translate a batch of texts in parallel.
+    Translate a batch of texts sequentially with rate limiting.
     Returns tuple of (translations_list, failed_translations_list, success_flag)
     """
     try:
         if DEBUG:
-            print(f"Translating batch of {len(texts)} items in parallel")
-        
-        # Translate in parallel using ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(texts), 10)) as executor:
-            results = list(executor.map(
-                lambda t: translate_single(t, from_language, to_language), 
-                texts
-            ))
-        
-        # Separate translations and failures
+            print(f"Translating batch of {len(texts)} items sequentially")
+
         translations = []
         failed_translations = []
-        
-        for i, (text, failed) in enumerate(results):
-            if failed:
-                failed_translations.append(texts[i])  # Store original filtered text
-                translations.append(texts[i])  # Keep original text for failed translations
-            else:
-                translations.append(text)  # Store successful translation
-        
+
+        # Translate sequentially to respect rate limits (max 5 requests/second)
+        for i, text in enumerate(texts):
+            try:
+                # Add delay between requests to stay under rate limit (max 5/sec)
+                if i > 0:  # No delay for first request
+                    time.sleep(0.25)  # 0.25s delay = max 4 requests/second (conservative)
+
+                translated_text, failed = translate_single(text, from_language, to_language)
+
+                if failed:
+                    failed_translations.append(text)
+                    translations.append(text)  # Keep original text for failed translations
+                else:
+                    translations.append(translated_text)
+
+            except TranslationRateLimitError:
+                # On rate limit, immediately stop and re-raise to halt the application
+                print(f"🚨 Rate limit hit during batch translation, stopping immediately")
+                raise
+            except Exception as e:
+                print(f"Translation failed for text #{i+1}: {e}")
+                failed_translations.append(text)
+                translations.append(text)  # Keep original text
+
         success = len(failed_translations) == 0
         return translations, failed_translations, success
-        
+
     except TranslationRateLimitError:
         # Re-raise rate limiting errors to stop the application
         raise
     except Exception as e:
         print(f'Error during batch translation: {str(e)}')
         log_message(f"Batch translation error: {str(e)}")
-        
+
         # Return original texts with all marked as failed
         return texts, texts, False
 

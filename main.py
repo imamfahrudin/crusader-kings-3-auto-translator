@@ -382,7 +382,10 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
                 
                 file_data[0] = file_data[0].replace(from_naming, to_naming)
                 if do_translation:
-                    translate(file_data, from_language, to_language, filename, str(file))
+                    failed_translations = translate(file_data, from_language, to_language, filename, str(file))
+                    # Write failed translations to CSV immediately after file completion
+                    if failed_translations:
+                        write_failed_translations_to_csv(failed_translations)
                 tofile(filepath, filename, file_data, from_naming, to_naming)
                 print(f"  ✓ Completed: {file.name}\n")
         
@@ -529,7 +532,11 @@ def write_failed_translations_to_csv(failed_translations):
 
 
 def translate(file_data, from_language, to_language, filename="", file_path=""):
-    """Translate file data with batching and adaptive rate limiting"""
+    """Translate file data with batching and adaptive rate limiting
+    
+    Returns:
+        list: List of failed translation dictionaries with file_path, line_number, and original_text
+    """
     
     # Collect all translatable lines with their indices
     translation_queue = []
@@ -620,9 +627,8 @@ def translate(file_data, from_language, to_language, filename="", file_path=""):
         
         print(f"  Translation complete: {total_lines} line(s) processed")
         
-        # Write failed translations to CSV if any
-        if failed_translations:
-            write_failed_translations_to_csv(failed_translations)
+        # Return failed translations for caller to handle
+        return failed_translations
     
     except TranslationRateLimitError:
         # Re-raise rate limiting errors to stop the application

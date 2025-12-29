@@ -471,23 +471,25 @@ class TestTranslate:
         mock_translate_batch.return_value = (["Hola Mundo", "Esta es una prueba"], [], True)
 
         file_data = sample_yml_content.copy()
-        translate(file_data, "en", "es", "test.yml", "/path/to/test.yml")
+        failed_translations = translate(file_data, "en", "es", "test.yml", "/path/to/test.yml")
 
         # Check that translations were applied
         assert '  test_key: "Hola Mundo"' in file_data[1]
         assert '  another_key: "Esta es una prueba"' in file_data[2]
+        # Should return empty list for successful translations
+        assert failed_translations == []
 
     @patch('main.translate_batch')
-    @patch('main.write_failed_translations_to_csv')
-    def test_translate_with_failures(self, mock_write_csv, mock_translate_batch, sample_yml_content):
+    def test_translate_with_failures(self, mock_translate_batch, sample_yml_content):
         """Test translation with some failures"""
         mock_translate_batch.return_value = (["Hola Mundo", "Hello World"], ["Hello World"], False)
 
         file_data = sample_yml_content.copy()
-        translate(file_data, "en", "es", "test.yml", "/path/to/test.yml")
+        failed_translations = translate(file_data, "en", "es", "test.yml", "/path/to/test.yml")
 
-        # Check that failed translations are recorded
-        mock_write_csv.assert_called_once()
+        # Check that failed translations are returned
+        assert len(failed_translations) == 1
+        assert failed_translations[0]['original_text'] == "Hello World"
 
     def test_translate_no_translatable_lines(self):
         """Test translation with no translatable lines"""
@@ -542,7 +544,8 @@ class TestInit:
     @patch('main.get_already_translated_files')
     @patch('main.translate')
     @patch('main.tofile')
-    def test_init_success(self, mock_tofile, mock_translate, mock_get_already, mock_list, temp_dir):
+    @patch('main.write_failed_translations_to_csv')
+    def test_init_success(self, mock_write_csv, mock_tofile, mock_translate, mock_get_already, mock_list, temp_dir):
         """Test successful initialization and processing"""
         # Create a proper file path mock
         test_file_path = temp_dir / "english" / "test_english.yml"
@@ -552,6 +555,9 @@ class TestInit:
 
         # Mock already translated files
         mock_get_already.return_value = set()
+
+        # Mock translate to return no failed translations
+        mock_translate.return_value = []
 
         source_dir = temp_dir / "english"
         target_dir = temp_dir / "german"
@@ -564,8 +570,48 @@ class TestInit:
 
         init(source_dir, target_dir, True, "en", "de", "english", "german")
 
-        # Verify translate was called
+        # Verify translate was called and CSV was not written (no failures)
         mock_translate.assert_called()
+        mock_write_csv.assert_not_called()
+
+    @patch('main.list')
+    @patch('main.get_already_translated_files')
+    @patch('main.translate')
+    @patch('main.tofile')
+    @patch('main.write_failed_translations_to_csv')
+    def test_init_with_failed_translations(self, mock_write_csv, mock_tofile, mock_translate, mock_get_already, mock_list, temp_dir):
+        """Test initialization with failed translations that should be written to CSV"""
+        # Create a proper file path mock
+        test_file_path = temp_dir / "english" / "test_english.yml"
+        
+        # Mock file listing to return actual Path objects
+        mock_list.return_value = [test_file_path]
+
+        # Mock already translated files
+        mock_get_already.return_value = set()
+
+        # Mock translate to return failed translations
+        failed_translations = [{
+            'file_path': str(test_file_path),
+            'line_number': 2,
+            'original_text': 'Hello World'
+        }]
+        mock_translate.return_value = failed_translations
+
+        source_dir = temp_dir / "english"
+        target_dir = temp_dir / "german"
+        source_dir.mkdir(parents=True)
+        target_dir.mkdir(parents=True)
+
+        # Create test file with proper YAML content
+        test_file = source_dir / "test_english.yml"
+        test_file.write_text('l_english:\n  test_key: "Hello World"\n')
+
+        init(source_dir, target_dir, True, "en", "de", "english", "german")
+
+        # Verify translate was called and CSV was written with failed translations
+        mock_translate.assert_called()
+        mock_write_csv.assert_called_once_with(failed_translations)
 
     @patch('main.list')
     def test_init_no_files_to_process(self, mock_list, temp_dir):

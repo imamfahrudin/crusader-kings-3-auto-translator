@@ -188,7 +188,18 @@ def validate_translation(source_dir, target_dir):
     print(f"  Target files: {target_count}")
     
     if source_count != target_count:
+        # Get relative paths for comparison
+        source_rel_paths = set(str(f.relative_to(source_dir)) for f in source_files)
+        target_rel_paths = set(str(f.relative_to(target_dir)) for f in target_files)
+        
+        missing_in_target = source_rel_paths - target_rel_paths
+        extra_in_target = target_rel_paths - source_rel_paths
+        
         print(f"  ✗ File count mismatch!")
+        if missing_in_target:
+            print(f"    Missing in target: {sorted(missing_in_target)}")
+        if extra_in_target:
+            print(f"    Extra in target: {sorted(extra_in_target)}")
         return False
     
     # Check folder structure
@@ -199,6 +210,12 @@ def validate_translation(source_dir, target_dir):
         print(f"  ✗ Folder structure mismatch!")
         print(f"    Source folders: {sorted(source_dirs)}")
         print(f"    Target folders: {sorted(target_dirs)}")
+        missing_dirs = source_dirs - target_dirs
+        extra_dirs = target_dirs - source_dirs
+        if missing_dirs:
+            print(f"    Missing directories in target: {sorted(missing_dirs)}")
+        if extra_dirs:
+            print(f"    Extra directories in target: {sorted(extra_dirs)}")
         return False
     
     print(f"  ✓ All files translated successfully")
@@ -436,7 +453,8 @@ def init(source_dir, target_dir, do_translation, from_language, to_language, fro
 
                 # Check if file has content
                 if not file_data:
-                    log("   ⚠️  Warning: Empty file, skipping...")
+                    log("   ⚠️  Warning: Empty file, creating empty target file...")
+                    tofile(filepath, filename, file_data, from_naming, to_naming)
                     continue
 
                 file_data[0] = file_data[0].replace(from_naming, to_naming)
